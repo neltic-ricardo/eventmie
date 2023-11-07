@@ -1,0 +1,77 @@
+version: "3.8"
+services:
+  app:
+    image: eventmie
+    container_name: app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    tty: true
+    environment:
+      SERVICE_NAME: app
+      SERVICE_TAGS: dev
+    networks:
+      eventmie-net:
+        ipv4_address: 172.28.0.7
+
+  app-db:
+    image: mysql:8.0.35-debian
+    platform: ${DB_PLATTFORM}
+    container_name: app-db
+    restart: unless-stopped
+    tty: true
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    ports:
+      - "3306:3306"
+    env_file:
+      - ./src/.env
+    volumes:
+      - ./app/data:/var/lib/mysql
+    networks:
+      eventmie-net:
+        ipv4_address: 172.28.0.8
+
+  cache:
+    container_name: cache
+    image: redis:6.2-alpine
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "6379:6379"
+    command: redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - cache:/data
+    networks:
+      eventmie-net:
+        ipv4_address: 172.28.0.10
+
+  proxy:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: proxy
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 81:81
+      - 443:443
+    volumes:
+      - ./proxy/data:/data
+      - ./proxy/letsencrypt:/etc/letsencrypt
+    networks:
+      eventmie-net:
+        ipv4_address: 172.28.0.11
+
+networks:
+  eventmie-net:
+    name: eventmie-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+          ip_range: 172.28.5.0/24
+          gateway: 172.28.5.25
